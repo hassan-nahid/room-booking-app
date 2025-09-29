@@ -1,6 +1,42 @@
 import nodemailer from 'nodemailer';
 
 /**
+ * Safe email sending wrapper for Vercel serverless functions
+ * @param {Function} emailFunction - The email function to execute
+ * @param {string} emailType - Type of email being sent (for logging)
+ * @returns {Promise<object>} Email sending result
+ */
+const safeEmailSend = async (emailFunction, emailType) => {
+  // Skip email sending in Vercel if environment variables are not properly set
+  if (process.env.VERCEL && (!process.env.EMAIL_HOST || !process.env.EMAIL_USER)) {
+    console.log(`📧 Email sending skipped in Vercel (${emailType}) - Email service not configured`);
+    return {
+      success: false,
+      skipped: true,
+      reason: 'Email service not configured for Vercel deployment'
+    };
+  }
+
+  try {
+    const result = await emailFunction();
+    return result;
+  } catch (error) {
+    // Log error but don't fail the booking process
+    console.error(`📧 Email sending failed (${emailType}):`, {
+      error: error.message,
+      code: error.code,
+      command: error.command
+    });
+    
+    return {
+      success: false,
+      error: error.message,
+      failedInProduction: true
+    };
+  }
+};
+
+/**
  * Test SMTP connection
  * @returns {Promise<boolean>} Connection test result
  */
@@ -34,10 +70,10 @@ const createTransporter = () => {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS,
     },
-    // Additional Gmail-specific settings
-    connectionTimeout: 10000, // 10 seconds
-    greetingTimeout: 5000, // 5 seconds
-    socketTimeout: 10000, // 10 seconds
+    // Vercel-optimized settings
+    connectionTimeout: 5000, // 5 seconds for serverless
+    greetingTimeout: 3000, // 3 seconds
+    socketTimeout: 5000, // 5 seconds
   });
 };
 
@@ -49,7 +85,7 @@ const createTransporter = () => {
  * @returns {Promise<object>} Email sending result
  */
 export const sendBookingConfirmationEmail = async (booking, property, guest) => {
-  try {
+  return safeEmailSend(async () => {
     const transporter = createTransporter();
 
     const checkInDate = new Date(booking.checkIn).toLocaleDateString('en-US', {
@@ -188,19 +224,7 @@ export const sendBookingConfirmationEmail = async (booking, property, guest) => 
       success: true,
       messageId: result.messageId,
     };
-  } catch (error) {
-    console.error('Email sending error - Guest confirmation:', {
-      error: error.message,
-      code: error.code,
-      command: error.command,
-      to: guest.email,
-      from: process.env.EMAIL_FROM
-    });
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
+  }, 'Guest Confirmation');
 };
 
 /**
@@ -212,7 +236,7 @@ export const sendBookingConfirmationEmail = async (booking, property, guest) => 
  * @returns {Promise<object>} Email sending result
  */
 export const sendHostNotificationEmail = async (booking, property, host, guest) => {
-  try {
+  return safeEmailSend(async () => {
     const transporter = createTransporter();
 
     const checkInDate = new Date(booking.checkIn).toLocaleDateString('en-US', {
@@ -338,19 +362,7 @@ export const sendHostNotificationEmail = async (booking, property, host, guest) 
       success: true,
       messageId: result.messageId,
     };
-  } catch (error) {
-    console.error('Host notification email error:', {
-      error: error.message,
-      code: error.code,
-      command: error.command,
-      to: host.email,
-      from: process.env.EMAIL_FROM
-    });
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
+  }, 'Host Notification');
 };
 
 /**
