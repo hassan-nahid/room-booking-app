@@ -24,6 +24,7 @@ import {
 import Button from "../components/Button/Button"
 import PaymentModal from "../components/PaymentModal"
 import LoginModal from "../components/LoginModal"
+import RegisterModal from "../components/RegisterModal"
 import { calculateBookingPrice } from "../services/paymentService"
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
@@ -52,6 +53,7 @@ export default function PropertyDetails() {
   const { user } = useAuth()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [showLoginModal, setShowLoginModal] = useState(false)
+  const [showRegisterModal, setShowRegisterModal] = useState(false)
   const [isFavorited, setIsFavorited] = useState(false)
   const [checkInDate, setCheckInDate] = useState(null)
   const [checkOutDate, setCheckOutDate] = useState(null)
@@ -186,6 +188,16 @@ export default function PropertyDetails() {
 
   const handlePaymentClose = () => {
     setShowPaymentModal(false)
+  }
+
+  const handleSwitchToRegister = () => {
+    setShowLoginModal(false)
+    setShowRegisterModal(true)
+  }
+
+  const handleSwitchToLogin = () => {
+    setShowRegisterModal(false)
+    setShowLoginModal(true)
   }
 
   if (isLoading) {
@@ -821,6 +833,14 @@ export default function PropertyDetails() {
       <LoginModal 
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
+        onSwitchToRegister={handleSwitchToRegister}
+      />
+
+      {/* Register Modal */}
+      <RegisterModal 
+        isOpen={showRegisterModal}
+        onClose={() => setShowRegisterModal(false)}
+        onSwitchToLogin={handleSwitchToLogin}
       />
 
       {/* Payment Modal */}
