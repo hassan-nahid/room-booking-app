@@ -229,19 +229,7 @@ airbnb-clone/
 - `POST /api/payments/create-intent` - Create payment intent
 - `POST /api/payments/confirm` - Confirm payment
 
-## 📸 Screenshots
 
-### Home Page
-![Home Page](docs/screenshots/home.png)
-
-### Property Details
-![Property Details](docs/screenshots/property-details.png)
-
-### Booking Flow
-![Booking Flow](docs/screenshots/booking.png)
-
-### Dashboard
-![Dashboard](docs/screenshots/dashboard.png)
 
 ## 🤝 Contributing
 
