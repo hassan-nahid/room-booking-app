@@ -1,8 +1,10 @@
 // backend/src/server.js
+// Load environment variables FIRST
+import './config/env.js';
+
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
-import dotenv from "dotenv";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
@@ -10,11 +12,10 @@ import rateLimit from "express-rate-limit";
 import { propertiesRoute } from "./routes/property.routes.js";
 import { authRoutes } from "./routes/auth.routes.js";
 import { bookingRoutes } from "./routes/booking.routes.js";
+import paymentRoutes from "./routes/payment.routes.js";
 
 // Error handling middleware
 import { errorHandler } from "./middleware/error.middleware.js";
-
-dotenv.config();
 const PORT = process.env.PORT || 5000;
 
 const app = express();
@@ -47,6 +48,7 @@ app.use(cors({
 app.use("/api/auth", authRoutes);
 app.use("/api/properties", propertiesRoute);
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // Health check endpoint
 app.get('/', (req, res) => {
@@ -80,8 +82,21 @@ app.all('*', (req, res) => {
 app.use(errorHandler);
 
 // Connect to MongoDB and start server
-mongoose.connect(process.env.MONGO_URI).then(() => {
+mongoose.connect(process.env.MONGO_URI).then(async () => {
   console.log('✅ Connected to MongoDB');
+  
+  // Test email connection
+  try {
+    const { testEmailConnection } = await import('./services/email.service.js');
+    const emailWorking = await testEmailConnection();
+    if (emailWorking) {
+      console.log('✅ Email service connection verified');
+    } else {
+      console.log('⚠️  Email service connection failed (emails may not work)');
+    }
+  } catch (error) {
+    console.log('⚠️  Email service test error:', error.message);
+  }
   
   const server = app.listen(PORT, () => {
     console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);

@@ -61,4 +61,54 @@ export const propertiesApi = {
   },
 }
 
+// Bookings API functions
+export const bookingsApi = {
+  // Get user's trips (as guest)
+  getUserTrips: async (params = {}) => {
+    const token = localStorage.getItem('token')
+    const response = await api.get('/bookings/my-bookings', { 
+      params: { type: 'guest', ...params },
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    return response.data
+  },
+
+  // Get host's bookings
+  getHostBookings: async (params = {}) => {
+    const token = localStorage.getItem('token')
+    const response = await api.get('/bookings/my-bookings', { 
+      params: { type: 'host', ...params },
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    return response.data
+  },
+
+  // Get single booking by ID
+  getById: async (id) => {
+    const token = localStorage.getItem('token')
+    const response = await api.get(`/bookings/${id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    return response.data
+  },
+
+  // Update booking status
+  updateBooking: async (id, updateData) => {
+    const token = localStorage.getItem('token')
+    const response = await api.put(`/bookings/${id}`, updateData, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    return response.data
+  },
+
+  // Cancel booking
+  cancelBooking: async (id) => {
+    const token = localStorage.getItem('token')
+    const response = await api.delete(`/bookings/${id}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    return response.data
+  }
+}
+
 export default api

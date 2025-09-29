@@ -18,7 +18,87 @@ const transformPropertyData = (apiProperty) => {
     maxGuests: apiProperty.maxGuests,
     bedrooms: apiProperty.bedrooms,
     bathrooms: apiProperty.bathrooms,
+    // Location data for grouping
+    city: apiProperty.location.city,
+    country: apiProperty.location.country,
+    district: apiProperty.location.district || apiProperty.location.city,
   }
+}
+
+// Group properties by location and create dynamic sections
+const createDynamicSections = (properties) => {
+  const sections = []
+  
+  // Group by district/city
+  const cityGroups = {}
+  const countryGroups = {}
+  
+  properties.forEach(property => {
+    const city = property.city
+    const country = property.country
+    const district = property.district
+    
+    // Group by city/district
+    const locationKey = district || city
+    if (!cityGroups[locationKey]) {
+      cityGroups[locationKey] = []
+    }
+    cityGroups[locationKey].push(property)
+    
+    // Group by country
+    if (!countryGroups[country]) {
+      countryGroups[country] = []
+    }
+    countryGroups[country].push(property)
+  })
+  
+  // Create sections based on property count
+  Object.entries(cityGroups).forEach(([location, locationProperties]) => {
+    if (locationProperties.length >= 5) {
+      sections.push({
+        title: `Popular homes in ${location}`,
+        properties: locationProperties.slice(0, 7),
+        type: 'city'
+      })
+    }
+  })
+  
+  // If we have less than 2 city-based sections, create country-based sections
+  if (sections.length < 2) {
+    Object.entries(countryGroups).forEach(([country, countryProperties]) => {
+      if (countryProperties.length >= 3 && sections.length < 2) {
+        sections.push({
+          title: `Available next month in ${country}`,
+          properties: countryProperties.slice(0, 7),
+          type: 'country'
+        })
+      }
+    })
+  }
+  
+  // If still not enough sections, use remaining properties
+  if (sections.length === 0 && properties.length > 0) {
+    sections.push({
+      title: 'Featured Properties',
+      properties: properties.slice(0, 7),
+      type: 'featured'
+    })
+  }
+  
+  if (sections.length === 1 && properties.length > 7) {
+    const usedPropertyIds = new Set(sections[0].properties.map(p => p.id))
+    const remainingProperties = properties.filter(p => !usedPropertyIds.has(p.id))
+    
+    if (remainingProperties.length > 0) {
+      sections.push({
+        title: 'More Great Places to Stay',
+        properties: remainingProperties.slice(0, 7),
+        type: 'additional'
+      })
+    }
+  }
+  
+  return sections
 }
 
 export default function Home() {
@@ -28,9 +108,8 @@ export default function Home() {
   // Transform the API data
   const properties = propertiesResponse?.data ? propertiesResponse.data.map(transformPropertyData) : []
 
-  // Split properties into two sections like the original design
-  const firstSectionProperties = properties.slice(0, 7) // First 7 properties for "Popular homes"
-  const secondSectionProperties = properties.slice(7, 14) // Next 7 properties for "Available next month"
+  // Create dynamic sections based on property distribution
+  const dynamicSections = createDynamicSections(properties)
 
   return (
     <div className="min-h-screen bg-white">
@@ -66,27 +145,33 @@ export default function Home() {
             {/* Main content - only show when not loading and no error */}
             {!isLoading && !error && (
               <>
-                {/* First Section - Popular homes */}
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-semibold text-gray-900">Popular homes in Dhaka District</h2>
-                  <button className="text-gray-900 hover:underline font-medium">Show all</button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-6 mb-12">
-                  {firstSectionProperties.map((property) => (
-                    <PropertyCard key={property.id} {...property} />
-                  ))}
-                </div>
-
-                {/* Second Section - Available next month */}
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-semibold text-gray-900">Available next month in Kuala Lumpur</h2>
-                  <button className="text-gray-900 hover:underline font-medium">Show all</button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-6">
-                  {secondSectionProperties.map((property) => (
-                    <PropertyCard key={property.id} {...property} />
-                  ))}
-                </div>
+                {/* Dynamic Sections */}
+                {dynamicSections.map((section, sectionIndex) => (
+                  <div key={sectionIndex} className={sectionIndex < dynamicSections.length - 1 ? "mb-12" : ""}>
+                    <div className="flex items-center justify-between mb-6">
+                      <h2 className="text-2xl font-semibold text-gray-900">{section.title}</h2>
+                      <button 
+                        className="text-gray-900 hover:underline font-medium"
+                        onClick={() => {
+                          // Navigate to search results with location filter
+                          const searchQuery = section.type === 'city' ? 
+                            section.title.replace('Popular homes in ', '').replace('Available next month in ', '') :
+                            section.type === 'country' ?
+                            section.title.replace('Available next month in ', '').replace('Popular homes in ', '') :
+                            'all'
+                          window.location.href = `/search?location=${encodeURIComponent(searchQuery)}`
+                        }}
+                      >
+                        Show all
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-6">
+                      {section.properties.map((property) => (
+                        <PropertyCard key={property.id} {...property} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
 
                 {/* Empty state */}
                 {properties.length === 0 && (
@@ -97,6 +182,18 @@ export default function Home() {
                     <div className="text-gray-400">
                       Check back later for new listings.
                     </div>
+                  </div>
+                )}
+
+                {/* Show all properties button if there are many properties */}
+                {properties.length > 14 && (
+                  <div className="text-center mt-12">
+                    <button 
+                      onClick={() => window.location.href = '/search'}
+                      className="px-8 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+                    >
+                      Explore All Properties ({properties.length})
+                    </button>
                   </div>
                 )}
               </>

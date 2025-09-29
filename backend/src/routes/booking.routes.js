@@ -66,6 +66,8 @@ router.get('/check-availability/:propertyId', availabilityValidation, checkAvail
 // Protected routes
 router.post('/', auth, createBookingValidation, createBooking);
 router.get('/my-bookings', auth, getMyBookings);
+router.get('/my-trips', auth, getMyBookings); // Alias for guest bookings
+router.get('/host-bookings', auth, requireHost, getMyBookings); // Host-specific route
 router.get('/:id', auth, getBookingById);
 router.put('/:id', auth, updateBooking);
 router.delete('/:id', auth, cancelBooking);

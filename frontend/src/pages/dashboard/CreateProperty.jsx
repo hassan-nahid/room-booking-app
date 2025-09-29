@@ -241,10 +241,7 @@ const CreateProperty = () => {
         break;
       
       case 6: {
-        const validImages = formData.images.filter(url => url.trim());
-        if (validImages.length === 0) {
-          newErrors.images = 'At least one image URL is required';
-        }
+        // Images are now optional - no validation required
         break;
       }
     }
@@ -273,13 +270,10 @@ const CreateProperty = () => {
     setLoading(true);
     
     try {
-      // Filter out empty image URLs
-      const validImages = formData.images.filter(url => url.trim());
-      
-      // Prepare form data for API
+      // Prepare form data for API (images are optional)
       const propertyPayload = {
         ...formData,
-        images: validImages,
+        images: formData.images.filter(url => url.trim()), // Keep only non-empty URLs
         // Ensure coordinates have values (required by backend)
         address: {
           ...formData.address,

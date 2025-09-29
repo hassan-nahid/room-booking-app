@@ -31,7 +31,7 @@ export const createProperty = async (req, res) => {
 // @access  Public
 export const getAllProperties = async (req, res) => {
   try {
-    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+    const { page = 1, limit = 1000, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
     const options = {
       page: parseInt(page),
       limit: parseInt(limit),

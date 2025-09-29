@@ -2,6 +2,8 @@ import { Booking } from '../models/booking.model.js';
 import { Property } from '../models/property.model.js';
 import { User } from '../models/user.model.js';
 import { validationResult } from 'express-validator';
+import { calculateBookingTotal } from '../services/stripe.service.js';
+import { sendBookingConfirmationEmail, sendHostNotificationEmail } from '../services/email.service.js';
 
 // @desc    Create new booking
 // @route   POST /api/bookings
@@ -60,17 +62,25 @@ export const createBooking = async (req, res) => {
       });
     }
 
-    // Calculate pricing
+    // Calculate pricing using Stripe service
     const checkInDate = new Date(checkIn);
     const checkOutDate = new Date(checkOut);
     const numberOfNights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
-    const subtotal = property.pricePerNight * numberOfNights;
-    const serviceFee = subtotal * 0.1; // 10% service fee
-    const cleaningFee = property.cleaningFee || 0;
-    const taxAmount = subtotal * 0.08; // 8% tax
-    const totalAmount = subtotal + serviceFee + cleaningFee + taxAmount;
+    
+    if (numberOfNights <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Check-out date must be after check-in date'
+      });
+    }
 
-    // Create booking
+    const pricing = calculateBookingTotal(
+      property.pricePerNight,
+      numberOfNights,
+      property.cleaningFee || 0
+    );
+
+    // Create booking with updated pricing structure
     const booking = new Booking({
       property: propertyId,
       guest: req.user.id,
@@ -78,16 +88,24 @@ export const createBooking = async (req, res) => {
       checkIn: checkInDate,
       checkOut: checkOutDate,
       numberOfGuests,
-      guestDetails,
-      pricePerNight: property.pricePerNight,
       numberOfNights,
-      subtotal,
-      serviceFee,
-      cleaningFee,
-      taxAmount,
-      totalAmount,
-      currency: property.currency,
-      status: property.instantBook ? 'confirmed' : 'pending',
+      guestDetails: guestDetails || {
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        email: req.user.email,
+        phone: req.user.phone
+      },
+      pricePerNight: property.pricePerNight,
+      totalAmount: pricing.total,
+      pricing: {
+        subtotal: pricing.subtotal,
+        cleaningFee: pricing.cleaningFee,
+        serviceFee: pricing.serviceFee,
+        tax: pricing.tax
+      },
+      currency: property.currency || 'USD',
+      bookingStatus: property.instantBook ? 'confirmed' : 'pending',
+      paymentStatus: 'pending', // Will be updated when payment is completed
       specialRequests
     });
 
@@ -102,9 +120,25 @@ export const createBooking = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: property.instantBook ? 'Booking confirmed!' : 'Booking request sent to host',
-      data: { booking }
+      message: property.instantBook ? 'Booking confirmed! Payment is required to complete the reservation.' : 'Booking request created. Payment is required to confirm.',
+      data: { 
+        booking,
+        pricing,
+        nextStep: 'Please proceed to payment to confirm your booking'
+      }
     });
+
+    // Send emails only if booking is confirmed and payment is completed
+    // (This will be handled by the payment confirmation endpoint)
+    if (property.instantBook && booking.paymentStatus === 'completed') {
+      // Send confirmation email to guest
+      sendBookingConfirmationEmail(booking, property, req.user)
+        .catch(err => console.error('Guest email error:', err));
+
+      // Send notification email to host
+      sendHostNotificationEmail(booking, property, property.host, req.user)
+        .catch(err => console.error('Host email error:', err));
+    }
   } catch (error) {
     res.status(500).json({
       success: false,

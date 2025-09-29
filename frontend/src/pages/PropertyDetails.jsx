@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { useParams, Link } from "react-router"
 import { useProperty } from "../hooks/useProperties"
+import { useAuth } from "../hooks/useAuth"
 import { 
   ArrowLeft, 
   Star, 
@@ -21,6 +22,9 @@ import {
   Shield
 } from "lucide-react"
 import Button from "../components/Button/Button"
+import PaymentModal from "../components/PaymentModal"
+import LoginModal from "../components/LoginModal"
+import { calculateBookingPrice } from "../services/paymentService"
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -45,11 +49,19 @@ const amenityIcons = {
 export default function PropertyDetails() {
   const { id } = useParams()
   const { data: propertyResponse, isLoading, error } = useProperty(id)
+  const { user } = useAuth()
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [showLoginModal, setShowLoginModal] = useState(false)
   const [isFavorited, setIsFavorited] = useState(false)
   const [checkInDate, setCheckInDate] = useState(null)
   const [checkOutDate, setCheckOutDate] = useState(null)
   const [guests, setGuests] = useState(1)
+  
+  // Payment state
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [pricing, setPricing] = useState(null)
+  const [isCalculatingPrice, setIsCalculatingPrice] = useState(false)
+  const [priceError, setPriceError] = useState('')
   
   // Calendar state
   const [showCalendar, setShowCalendar] = useState(false)
@@ -68,6 +80,45 @@ export default function PropertyDetails() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Calculate pricing when dates or guests change
+  useEffect(() => {
+    const calculatePricing = async () => {
+      const property = propertyResponse?.data
+      if (!property || !checkInDate || !checkOutDate || !guests) {
+        setPricing(null)
+        return
+      }
+
+      setIsCalculatingPrice(true)
+      setPriceError('')
+
+      try {
+        const bookingData = {
+          propertyId: property._id,
+          checkIn: checkInDate.toISOString(),
+          checkOut: checkOutDate.toISOString(),
+          numberOfGuests: guests
+        }
+
+        const pricingResponse = await calculateBookingPrice(bookingData)
+        
+        // Extract pricing from the API response
+        if (pricingResponse.success && pricingResponse.data) {
+          setPricing(pricingResponse.data.pricing)
+        } else {
+          setPricing(null)
+        }
+      } catch (error) {
+        console.error('Error calculating pricing:', error)
+        setPriceError('Failed to calculate pricing. Please try again.')
+      } finally {
+        setIsCalculatingPrice(false)
+      }
+    }
+
+    calculatePricing()
+  }, [propertyResponse, checkInDate, checkOutDate, guests])
 
   // Calendar helper functions
   const generateCalendarDays = (month) => {
@@ -108,26 +159,41 @@ export default function PropertyDetails() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
+  const handleReserve = async () => {
+    if (!user) {
+      setShowLoginModal(true)
+      return
+    }
+
+    if (!checkInDate || !checkOutDate) {
+      alert('Please select check-in and check-out dates')
+      return
+    }
+
+    if (!guests || guests < 1) {
+      alert('Please select number of guests')
+      return
+    }
+
+    setShowPaymentModal(true)
+  }
+
+  const handlePaymentSuccess = () => {
+    setShowPaymentModal(false)
+    // Optionally redirect to bookings page or show success message
+    alert('Booking confirmed! Check your email for confirmation details.')
+  }
+
+  const handlePaymentClose = () => {
+    setShowPaymentModal(false)
+  }
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-white">
-        <div className="max-w-[1920px] mx-auto px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 2xl:px-20 py-8">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-300 rounded w-1/4 mb-6"></div>
-            <div className="h-[50vh] min-h-[300px] max-h-[450px] bg-gray-300 rounded-xl mb-6"></div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2">
-                <div className="h-6 bg-gray-300 rounded w-3/4 mb-4"></div>
-                <div className="h-4 bg-gray-300 rounded w-1/2 mb-6"></div>
-                <div className="space-y-3">
-                  <div className="h-4 bg-gray-300 rounded"></div>
-                  <div className="h-4 bg-gray-300 rounded"></div>
-                  <div className="h-4 bg-gray-300 rounded w-3/4"></div>
-                </div>
-              </div>
-              <div className="h-64 bg-gray-300 rounded-xl"></div>
-            </div>
-          </div>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading property details...</p>
         </div>
       </div>
     )
@@ -137,23 +203,30 @@ export default function PropertyDetails() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Property Not Found</h1>
-          <p className="text-gray-600 mb-6">
-            {error.message || "The property you're looking for doesn't exist."}
-          </p>
-          <Link to="/">
-            <Button label="Back to Home" icon={ArrowLeft} />
+          <p className="text-red-600 text-xl mb-4">Error loading property</p>
+          <p className="text-gray-600 mb-4">{error.message}</p>
+          <Link to="/" className="text-blue-600 hover:text-blue-800">
+            Return to Home
           </Link>
         </div>
       </div>
     )
   }
 
-  const property = propertyResponse?.data
-
-  if (!property) {
-    return null
+  if (!propertyResponse || !propertyResponse.data) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600 text-xl">Property not found</p>
+          <Link to="/" className="text-blue-600 hover:text-blue-800 mt-4 inline-block">
+            Return to Home
+          </Link>
+        </div>
+      </div>
+    )
   }
+
+  const property = propertyResponse.data
 
   const nextImage = () => {
     setCurrentImageIndex((prev) => (prev + 1) % property.images.length)
@@ -687,8 +760,18 @@ export default function PropertyDetails() {
                     </select>
                   </div>
 
-                  <Button label="Reserve" />
+                  <Button 
+                    label={isCalculatingPrice ? "Calculating..." : "Reserve"} 
+                    onClick={handleReserve}
+                    disabled={isCalculatingPrice || !checkInDate || !checkOutDate}
+                  />
 
+                  {priceError && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                      <p className="text-red-600 text-sm">{priceError}</p>
+                    </div>
+                  )}
+                  
                   <p className="text-center text-sm text-gray-600">
                     You won't be charged yet
                   </p>
@@ -733,6 +816,27 @@ export default function PropertyDetails() {
           </div>
         </div>
       </div>
+
+      {/* Login Modal */}
+      <LoginModal 
+        isOpen={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+      />
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        property={property}
+        bookingData={{
+          propertyId: property._id,
+          checkIn: checkInDate?.toISOString(),
+          checkOut: checkOutDate?.toISOString(),
+          numberOfGuests: guests
+        }}
+        pricing={pricing}
+        onSuccess={handlePaymentSuccess}
+        onClose={handlePaymentClose}
+      />
     </div>
   )
 }

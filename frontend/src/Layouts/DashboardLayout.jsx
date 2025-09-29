@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../hooks/useAuth';
 import { DashboardProvider, useDashboard } from '../hooks/useDashboard.jsx';
 import { 
@@ -84,10 +84,10 @@ const DashboardLayoutContent = () => {
         <div className="hidden md:flex md:w-64 md:flex-col">
           <div className="flex flex-col flex-grow pt-5 bg-white border-r border-gray-200">
             {/* Logo */}
-            <div className="flex items-center flex-shrink-0 px-4">
+            <Link to={"/"} className="flex items-center flex-shrink-0 px-4">
               <img src="/aircnc.png" alt="Aircnc" className="h-8 w-auto" />
               <span className="ml-2 text-lg font-semibold text-gray-900">Dashboard</span>
-            </div>
+            </Link>
 
             {/* User Info */}
             <div className="px-4 py-4 mt-6 bg-gray-50 mx-4 rounded-lg">
